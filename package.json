@@ -1,0 +1,14 @@
+{
+  "name": "evacora",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {},
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "argon2": "^0.28.5",
+    "clipboardy": "^3.0.0"
+  }
+}
