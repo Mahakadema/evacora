@@ -1,0 +1,10 @@
+{
+    "checksum": "$argon2id$v=19$m=262144,t=20,p=4$a3kY9aYCESurePtX/tvwXg$nrdG3vH1m0Eq3wgF60zpr+V+T/LMO6VBz/et80PB",
+    "example.com": [
+        { "names": ["admin", "main", "adm"], "salt": "abc", "length": 45 },
+        { "names": ["second-account", "alt", "second"], "salt": "", "length": 25 }
+    ],
+    "home-server": [
+        { "names": ["root", "admin", "main"], "salt": "", "length": 30 }
+    ]
+}
