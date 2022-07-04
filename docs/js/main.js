@@ -31,6 +31,8 @@ options.addEventListener("submit", async (event) => {
     };
 
     calcWorker(arg, (encodedHash, err) => {
+        generateButton.disabled = false;
+
         if (err) {
             console.error(err);
             passwordContainer.innerHTML = "Failed to generate password: " + err + ' <button disabled="true">Copy</button>';
@@ -44,10 +46,8 @@ options.addEventListener("submit", async (event) => {
         }
 
         const inputHasChanged = passwordText === "*"
-        passwordText = `${salt}# ${user} @ ${srvName} &mdash; ${final.join("")}`;
+        passwordText = `${salt}# ${user} @ ${srvName} &mdash; <div id="pwtext" class="inline spoiler extended-background" onclick="this.classList.remove('spoiler')">${final.join("")}</div>`;
         passwordContainer.innerHTML = `${inputHasChanged ? "*" : ""}${passwordText} <button onclick="navigator.clipboard.writeText('${final.join("")}')">Copy</button>`;
-
-        generateButton.disabled = false;
     });
 });
 
@@ -79,9 +79,8 @@ function loadScript(src, onload, onerror) {
     document.body.appendChild(el);
 }
 
-var worker;
 function calcWorker(arg, cb) {
-    worker = new Worker('js/worker.js');
+    const worker = new Worker('js/worker.js');
     worker.method = "simd";
     var loaded = false;
     worker.onmessage = function (e) {
