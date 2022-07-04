@@ -1,6 +1,6 @@
 {
   "name": "evacora",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "",
   "main": "index.js",
   "type": "module",
@@ -8,7 +8,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "argon2": "^0.28.5",
+    "argon2": "^0.28.7",
     "clipboardy": "^3.0.0"
   }
 }
