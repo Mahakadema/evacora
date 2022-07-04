@@ -10,6 +10,10 @@ const write = clip.write;
  */
 const dataLocation = "./.json";
 
+const MEMORY_COST = 262144;
+const TIME_COST = 20;
+const PARALLELISM = 4;
+
 const base64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 const charset = "!#$%()*,-./0123456789:@ABCDEFGHIJKLMNOPQR^_`abcdefghijklmnopqr|~";
 
@@ -32,7 +36,7 @@ async function main() {
 async function get(name, pw, salt, users, length, outputMethod) {
     // check reqs
     if (length > 60 || length < 16)
-        throw new Error("length has to be 16 <= length <= 60");
+        throw new Error("Length has to be between 16 and 60 inclusive");
     if (!name)
         throw new Error("Name required!");
     if (!pw)
@@ -44,11 +48,11 @@ async function get(name, pw, salt, users, length, outputMethod) {
         const data = JSON.parse(readFileSync(dataLocation, "utf-8"));
         checksum = data.checksum ?? "null";
         if (users[0]) {
-            // find full name of provided acronym
+            // find full name of provided alias
             let found = false;
             for (const user of data[name]) {
-                if (user.names.includes(users[0])) {
-                    users[0] = { u: user.names[0], s: user.salt, l: user.length };
+                if (user.names.map(v => v.toLowerCase()).includes(users[0].toLowerCase())) {
+                    users[0] = { u: user.names[0], s: user.salt, l: user.length, n: user.note };
                     found = true;
                     break;
                 }
@@ -59,7 +63,7 @@ async function get(name, pw, salt, users, length, outputMethod) {
             // fill with all usernames associated with service name
             users = [];
             for (const user of data[name]) {
-                users.push({ u: user.names[0], s: user.salt, l: user.length });
+                users.push({ u: user.names[0], s: user.salt, l: user.length, n: user.note });
             }
             if (users.length === 0) {
                 users.push("null");
@@ -67,7 +71,7 @@ async function get(name, pw, salt, users, length, outputMethod) {
             }
         }
     } catch (e) {
-        users[0] = { u: users[0], s: salt, l: length };
+        users[0] = { u: users[0] ?? "null", s: salt, l: length, n: "" };
         console.log(`No data for ${users[0].u}@${name} found! Resorting to user="${users[0].u}" salt="${users[0].s}" length=${users[0].l}`);
     }
 
@@ -76,9 +80,9 @@ async function get(name, pw, salt, users, length, outputMethod) {
         const pwHash = await hash(pw, {
             type: argon2id,
             hashLength: 30,
-            memoryCost: 262144,
-            timeCost: 20,
-            parallelism: 4
+            memoryCost: MEMORY_COST,
+            timeCost: TIME_COST,
+            parallelism: PARALLELISM
         });
         console.log(`Password checksum:\n"${pwHash}"\nSet 'checksum' in your local file to this value to enable password checking.`);
     } else {
@@ -94,9 +98,9 @@ async function get(name, pw, salt, users, length, outputMethod) {
             type: argon2id,
             salt: Buffer.from(`ASk[Jw,%7/M"~&p9!H|Lfl3FUw{3l;P!${u.s}#${u.u}@${name}`),
             hashLength: u.l,
-            memoryCost: 262144,
-            timeCost: 20,
-            parallelism: 4
+            memoryCost: MEMORY_COST,
+            timeCost: TIME_COST,
+            parallelism: PARALLELISM
         })).split("$").at(-1).split("").slice(0, length));
     }
 
@@ -113,7 +117,7 @@ async function get(name, pw, salt, users, length, outputMethod) {
             setTimeout(() => { console.log("Deleted from clipboard!"); write("null"); }, 15000);
             break;
         case "STDOUT":
-            console.log(`\n${name}${users.reduce((p, c, i) => p + `\n  ${(c.s + "# " + c.u).padEnd(40)} ${final[i].join("")}`, "")}`);
+            console.log(`\n${name}${users.reduce((p, c, i) => p + `\n  ${(c.s + "# " + c.u).padEnd(40)} ${final[i].join("")}    ${c.n}`, "")}`);
             break;
     }
 }
