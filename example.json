@@ -1,10 +1,15 @@
 {
     "checksum": "$argon2id$v=19$m=262144,t=20,p=4$a3kY9aYCESurePtX/tvwXg$nrdG3vH1m0Eq3wgF60zpr+V+T/LMO6VBz/et80PB",
-    "example.com": [
-        { "names": ["admin", "main", "adm"], "salt": "abc", "length": 45, "note": "recovery account for second-acount" },
-        { "names": ["second-account", "alt", "second"], "salt": "", "length": 25 }
-    ],
-    "home-server": [
-        { "names": ["root", "admin", "main"], "salt": "", "length": 30 }
-    ]
+    "services": {
+        "example.com": [
+            { "name": "admin", "salt": "abc", "length": 45, "note": "second-account uses this for recovery" },
+            { "name": "second-account", "salt": "", "length": 25, "note": "" },
+            "private"
+        ],
+        "home-server": [
+            { "name": "root", "salt": "", "length": 30, "note": "" },
+            "user",
+            "guest"
+        ]
+    }
 }
