@@ -15,16 +15,17 @@ options.addEventListener("submit", async (event) => {
 
     passwordContainer.innerHTML = 'Generating! Please wait... <button disabled="true">Copy</button>';
 
-    const srvName = event.currentTarget.elements["service-name"].value
+    const service = event.currentTarget.elements["service-name"].value
     const user = event.currentTarget.elements["username"].value || "null";
     const salt = event.currentTarget.elements["salt"].value;
     const length = Number(event.currentTarget.elements["length-slide"].value);
+    const master = event.currentTarget.elements["password"].value;
 
     const arg = {
-        pass: event.currentTarget.elements["password"].value,
-        salt: `ASk[Jw,%7/M"~&p9!H|Lfl3FUw{3l;P!${salt}#${user}@${srvName}`,
+        pass: master,
+        salt: `ASk[Jw,%7/M"~&p9!H|Lfl3FUw{3l;P!${salt}#${user}@${service}`,
         time: 20,
-        mem: 262144,
+        mem: 1 << 18,
         hashLen: length,
         parallelism: 4,
         type: 2
@@ -46,7 +47,7 @@ options.addEventListener("submit", async (event) => {
         }
 
         const inputHasChanged = passwordText === "*"
-        passwordText = `${salt}# ${user} @ ${srvName} &mdash; <div id="pwtext" class="inline spoiler extended-background" onclick="this.classList.remove('spoiler')">${final.join("")}</div>`;
+        passwordText = `${salt}# ${user} @ ${service} &mdash; <div id="pwtext" class="inline spoiler extended-background" onclick="this.classList.remove('spoiler')">${final.join("")}</div>`;
         passwordContainer.innerHTML = `${inputHasChanged ? "*" : ""}${passwordText} <button onclick="navigator.clipboard.writeText('${final.join("")}')">Copy</button>`;
     });
 });
