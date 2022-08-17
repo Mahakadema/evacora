@@ -38,7 +38,7 @@ import {
  * @typedef {{ password: string, checksum: string }} master
  */
 
-// -----<I Am Division Line>-----
+// --------<I Am Division Line>--------
 const divisionLine = new inquirer.Separator(chalk.rgb(...grayBright)("━━━━━━━━"));
 const exitOption = {
     name: "Exit",
@@ -214,6 +214,10 @@ async function getMasterPassword(args, checksum, forceRehash, hasFile) {
         console.log(infoPrefix, "Password registered! Password checking has been enabled");
     }
 
+    /**
+     * Has the responsibility to only change checksum if hasFile is true
+     * (currently solved because forceRehash is false and checksum is null when hasFile === false)
+     */
     return {
         checksum,
         password
@@ -244,7 +248,7 @@ const passwordBadOption = new inquirer.Separator(chalk.redBright(`${chalk.gray("
  * @param {data} data 
  * @param {string} password 
  */
-async function action(args, data, password) {
+async function mainMenu(args, data, password) {
     const { input } = await prompt([
         {
             type: "list",
@@ -700,5 +704,5 @@ export {
     noDataRetrievalDialogue,
     getMasterPassword,
     retrievePasswords,
-    action
+    mainMenu
 };

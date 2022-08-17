@@ -1,6 +1,6 @@
 
 // modules
-import { noDataRetrievalDialogue, retrievePasswords, getMasterPassword, action } from "./src/interactions.js";
+import { noDataRetrievalDialogue, retrievePasswords, getMasterPassword, mainMenu } from "./src/interactions.js";
 import {
     errorPrefix,
     warnPrefix,
@@ -23,10 +23,11 @@ import {
 /**
  * @typedef {{ file: string, charset: string, verbose: boolean, outputMethod: "CLIPBOARD" | "STDOUT", help: boolean, passwordVisibility: "HIDDEN" | "MASKED" | "CLEAR", quick: boolean, createFile: string, timeout: number, import: string }} args The command line args
  * @typedef {{ data: data, version: number, checksum: string }} fileContents
- * @typedef {{ password: string, key: EncryptionKey }} secret
- * @typedef {{ secret: Buffer, salt: Buffer }} EncryptionKey
  */
 
+/**
+ * Runs the program
+ */
 async function main() {
     // parse argv
     let args;
@@ -48,7 +49,7 @@ async function main() {
         return;
     }
 
-    // init-file flag
+    // create-file flag
     if (args.createFile) {
         createFile(args);
         return;
@@ -60,9 +61,10 @@ async function main() {
         if (args.verbose)
             console.log(debugPrefix, "Fetching file...");
         /**
-         * forceRehash is true if the hash in file is invalid
-         * hasFile is true if the file exists
-         * dataHealthy is true if the data property contains b64
+         * version is set if the file exists
+         * forceRehash is true if the hash in the file is invalid
+         * dataDamaged is true if the data property contains unparsable data
+         * dataCleared is true if the user decided to clear the data because it was damaged
          */
         const { version, checksum: fetchedChecksum, data: encryptedData, forceRehash, dataDamaged, dataCleared } = await fetchFile(args);
 
@@ -76,7 +78,7 @@ async function main() {
 
         // fix bad data
         // can only be true if a file was loaded
-        // no excryption key is needed for this, as the data is already encrypted
+        // no excryption key is needed for this saveFile call, as the data is already encrypted
         if (checksum !== fetchedChecksum || dataCleared) {
             if (args.verbose)
                 console.log(debugPrefix, "Saving updated data...");
@@ -84,7 +86,7 @@ async function main() {
         }
 
         // decrypt data
-        const data = await decryptData(args, encryptedData, password, version, dataDamaged, version !== null);
+        const data = await decryptData(args, encryptedData, password, dataDamaged, version !== null, version);
 
         // import data if flag is set and if the file was loaded (terminates the program)
         if (args.import && version !== null) {
@@ -115,7 +117,7 @@ async function loop(args, data, password) {
     while (true) {
         // call interactions
         if (data) {
-            await action(args, data, password);
+            await mainMenu(args, data, password);
         } else {
             await retrievePasswords(args, noDataRetrievalDialogue(args), password);
         }

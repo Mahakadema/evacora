@@ -32,7 +32,7 @@ export const defaultInactivityTimeout = 120; // After this amount of millisecond
 export const base64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 export const defaultCharset = "!#$%()*,-./0123456789:@ABCDEFGHIJKLMNOPQR^_`abcdefghijklmnopqr|~";
 export const defaultLength = 30;
-export const strongPasswordThreshold = 64;
+export const strongPasswordThreshold = 64; // required bits of entropy for a good generated password
 export const validJSONPathRegExp = /^(?:\w\:)?(?:[^\\\/]*[\\\/])*(?:[^\\\/]*\.json)$/i;
 
 export const errorPrefix = chalk.red("[") + chalk.redBright("ERROR") + chalk.red("]");
@@ -48,7 +48,7 @@ export const prompt = inquirer.createPromptModule();
  * @typedef {{ file: string, charset: string, verbose: boolean, outputMethod: "CLIPBOARD" | "STDOUT", help: boolean, passwordVisibility: "HIDDEN" | "MASKED" | "CLEAR", quick: boolean, createFile: string, timeout: number, import: string }} args The command line args
  * @typedef {{ data: data, version: number, checksum: string }} fileContents
  * @typedef {{ version: number, services: {} }} data
- * @typedef {{ secret: Buffer, salt: Buffer }} EncryptionKey
+ * @typedef {{ key: Buffer, salt: Buffer }} EncryptionSecret
  */
 
 
@@ -58,7 +58,7 @@ export const prompt = inquirer.createPromptModule();
  * **********
  */
 
-// used by fetchFile and saveFile
+// used by fetchFile, saveFile, createFile and updateFile
 const file = {
     version: null,
     checksum: null,
@@ -68,6 +68,7 @@ const file = {
 /**
  * fetch data if possible and sanity check
  * @param {args} args
+ * @returns {Promise<{ version: number?, checksum: string?, data: string?, forceRehash: boolean, dataDamaged: boolean, dataCleared: boolean }>}
  */
 export async function fetchFile(args) {
     const noData = {
@@ -116,14 +117,15 @@ export async function fetchFile(args) {
         console.log(`${warnPrefix} Couldn't parse 'checksum', needs to be nullish or an argon2 hash\n${warnPrefix} Password checking has been temporarily disabled`);
         forceRehash = true;
     }
-    // check data integrity (b64{32}$b64{32}$b64*)
+    // check data integrity (24 bytes salt, 24 bytes iv, 16 bytes MAC, n bytes ciphertext)
     if (file.data !== null && !/^[A-Za-z0-9+/]{32}\$[A-Za-z0-9+/]{32}\$[A-Za-z0-9+/]{22}\$[A-Za-z0-9+/]*$/.test(file.data)) {
-        console.log(warnPrefix, "Couldn't parse 'data', needs to be nullish or three base 64 strings joined by '$'");
+        console.log(warnPrefix, "Couldn't parse 'data', needs to be nullish or four base 64 strings joined by '$'");
         const { clear } = await prompt([{
             type: "confirm",
             name: "clear",
             message: "Do you want to clear the service data? This will permanently delete registered services"
         }]);
+        // enforce either returning null data if it was cleared, or marking the data as damaged, in which case decryptData will return null
         if (clear) {
             file.data = null;
             dataCleared = true;
@@ -143,19 +145,24 @@ export async function fetchFile(args) {
 }
 
 /**
- * Saves data to the local file
+ * Saves data to the local file.
+ * If the 'data' property is a data object, {@link initEncryptionKey} needs to have been called beforehand
  * @param {args} args 
- * @param {{ version?: number, checksum?: string, data?: string | data }} contents
+ * @param {{ version?: number, checksum?: string, data?: string | data? }} contents
  */
 export function saveFile(args, contents) {
+    if (!encryptionSecret)
+        throw new Error("No EncryptionKey initialized");
+
     if (!file.version)
         throw new Error("Cannot modify file without loading it first");
 
     // modify file
     const writtenTo = [];
     if (contents.data !== undefined) {
+        // contents.data is always either an object to encrypt (has version property), a string thats already encrypted, or null
         if (contents.data?.version) {
-            file.data = encryptData(contents.data, encryptionKey)
+            file.data = encryptData(contents.data)
         } else {
             file.data = contents.data;
         }
@@ -311,16 +318,22 @@ function updateData(data) {
  */
 
 /**
+ * The encryption key used in {@link encryptData}
+ * @type {EncryptionSecret?}
+ */
+let encryptionSecret = null;
+
+/**
  * decrypts the ciphertext stored in data using the master password 
  * @param {args} args
  * @param {string} encrypted the ciphertext along with the key salt and IV
  * @param {string} password 
- * @param {number} fileVersion FILE_VERSION of the file
  * @param {boolean} dataDamaged whether the data is parsable
  * @param {boolean} hasFile whether a file was loaded
+ * @param {number} fileVersion FILE_VERSION of the file
  * @returns {Promise<data?>}
  */
-export async function decryptData(args, encrypted, password, fileVersion, dataDamaged, hasFile) {
+export async function decryptData(args, encrypted, password, dataDamaged, hasFile, fileVersion) {
     const errMessage = "Cannot decrypt damaged data, continuing without data.";
 
     // fail if data cannot be parsed
@@ -339,7 +352,7 @@ export async function decryptData(args, encrypted, password, fileVersion, dataDa
     const key = await cipherKey(password, Buffer.from(salt, "base64"));
     // decipher
     try {
-        const decipher = createDecipheriv("aes-256-gcm", key.secret, Buffer.from(iv, "base64")).setAuthTag(Buffer.from(authTag, "base64"));
+        const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(iv, "base64")).setAuthTag(Buffer.from(authTag, "base64"));
         const cleartext = decipher.update(ciphertext, "base64", "utf-8") + decipher.final("utf-8");
 
         const data = JSON.parse(cleartext);
@@ -370,23 +383,22 @@ export async function decryptData(args, encrypted, password, fileVersion, dataDa
 /**
  * encrypts cleartext into a ciphertext to be stored in data, padding is stripped
  * @param {data} data The data to encrypt
- * @param {EncryptionKey} key The key for the session
  * @returns {string}
  */
-export function encryptData(data, key) {
+function encryptData(data) {
     const iv = randomBytes(24);
-    const cipher = createCipheriv("aes-256-gcm", key.secret, iv);
+    const cipher = createCipheriv("aes-256-gcm", encryptionSecret.key, iv);
     const ciphertext = cipher.update(JSON.stringify(data), "utf-8", "base64") + cipher.final("base64").split("=")[0];
     const authTag = cipher.getAuthTag().toString("base64").split("=")[0];
     const ivEncoded = iv.toString("base64");
-    const saltEncoded = key.salt.toString("base64");
+    const saltEncoded = encryptionSecret.salt.toString("base64");
     return [saltEncoded, ivEncoded, authTag, ciphertext].join("$");
 }
 
 /**
  * Generates the passwords for the selected users
  * @param {string} service 
- * @param {{ name: string, salt: string, length: number, note: string }} users 
+ * @param {{ name: string, salt: string, length: number, note: string }[]} users 
  * @param {string} masterPassword 
  * @param {string} charset 
  * @param {number} parallelHashes 
@@ -416,32 +428,33 @@ export async function generatePasswords(service, users, masterPassword, charset,
  * Generates a 256 bit cipher key
  * @param {string} password 
  * @param {Buffer} salt
- * @returns {Promise<EncryptionKey>}
+ * @returns {Promise<Buffer>}
  */
-export async function cipherKey(password, salt) {
-    return {
-        secret: await hash(password, {
-            type: argon2id,
-            memoryCost: MEMORY_COST,
-            timeCost: TIME_COST,
-            parallelism: PARALLELISM,
-            salt: salt,
-            hashLength: 32,
-            raw: true
-        }),
-        salt: salt
-    };
+export function cipherKey(password, salt) {
+    return hash(password, {
+        type: argon2id,
+        memoryCost: MEMORY_COST,
+        timeCost: TIME_COST,
+        parallelism: PARALLELISM,
+        salt: salt,
+        hashLength: 32,
+        raw: true
+    });
 }
 
-let encryptionKey = null;
 /**
- * Sets the encryptionKey to a new key
+ * Sets the encryptionSecret to a new key. Needs to be called once before data can be encrypted in the {@link saveFile} function
  * @param {string} password
  * @param {boolean} force whether to force generation, even if a key already exists
  */
 export async function initEncryptionKey(password, force) {
-    if (!encryptionKey || force)
-        encryptionKey = await cipherKey(password, randomBytes(24));
+    if (!encryptionSecret || force) {
+        const salt = randomBytes(24);
+        encryptionSecret = {
+            key: await cipherKey(password, salt),
+            salt: salt
+        };
+    }
 }
 
 
@@ -452,7 +465,7 @@ export async function initEncryptionKey(password, force) {
  */
 
 /**
- * display a help message
+ * Displays a help message
  */
 export function helpMessage() {
     console.log(
@@ -475,7 +488,7 @@ export function helpMessage() {
 }
 
 /**
- * Parse argv args
+ * Parses argv args
  * @returns {args}
  */
 export function parseArgs() {
@@ -527,7 +540,7 @@ export function parseArgs() {
     if (args.file && !/\.json$/i.test(args.file))
         args.file += ".json";
 
-    // if present, file has to point to a valid .json file
+    // if present, --file has to point to a valid .json file
     if (args.file && !validJSONPathRegExp.test(args.file))
         throw new Error("The --file option has to be a path pointing to a JSON file");
 
@@ -535,11 +548,11 @@ export function parseArgs() {
     if (args.import && !/\.json$/i.test(args.import))
         args.import += ".json";
 
-    // if present, import has to point to a valid .json file
+    // if present, --import has to point to a valid .json file
     if (args.import && !validJSONPathRegExp.test(args.import))
         throw new Error("The --import option has to be a path pointing to a JSON file");
 
-    // import needs file
+    // --import needs --file
     if (args.import && !args.file)
         throw new Error("You cannot import without also specifying --file");
 
@@ -547,17 +560,18 @@ export function parseArgs() {
     if (args.createFile && !/\.json$/i.test(args.createFile))
         args.createFile += ".json";
 
-    // if present, createFile has to point to a valid .json file
+    // if present, --createFile has to point to a valid .json file
     if (args.createFile && !validJSONPathRegExp.test(args.createFile))
         throw new Error("The --create-file option has to be a path pointing to a JSON file");
 
-    // file and create-file are mutually exclusive
+    // --file and --create-file are mutually exclusive
     if (args.file && args.createFile)
         throw new Error("The --file and --create-file options are mutually exclusive");
 
     // sort charset and remove duplicate characters
     args.charset = args.charset.split("").sort().filter((v, i, a) => a[i - 1] !== v).join("");
 
+    // charset has to contain 2-64 characters
     if (args.charset.length > 64 || args.charset.length < 2)
         throw new Error("The charset has to contain 2 to 64 unique characters");
 
@@ -578,7 +592,7 @@ export async function getMaxParallelHashes() {
     // max parallel hashes while only using cores with < 25% usage
     const testStart = cpus();
     await sleep(100);
-    const coreSlotsAvailable = Math.max(1, Math.floor(cpus().map((v, i) => (
+    const cpuSlotsAvailable = Math.max(1, Math.floor(cpus().map((v, i) => (
         (v.times.idle - testStart[i].times.idle) /
         (v.times.idle - testStart[i].times.idle +
             v.times.irq - testStart[i].times.irq +
@@ -586,7 +600,7 @@ export async function getMaxParallelHashes() {
             v.times.sys - testStart[i].times.sys +
             v.times.user - testStart[i].times.user)
     )).filter(v => v >= 0.75).length / PARALLELISM));
-    return Math.min(coreSlotsAvailable, memorySlotsAvailable);
+    return Math.min(cpuSlotsAvailable, memorySlotsAvailable);
 }
 
 /**
@@ -661,7 +675,8 @@ export function generatedPasswordEntropy(charset, length) {
 
 /**
  * Returns a path to a location that isn't already used
- * @param {string} path 
+ * @param {string} path
+ * @returns {string?} A safe path to a file that doesn't exist yet, null if the directory doesn't exist
  */
 export function getSafePathForNewJsonFile(path) {
     const directory = path.slice(0, Math.max(0, path.lastIndexOf("/"), path.lastIndexOf("\\"))) || ".";
