@@ -7,7 +7,7 @@ const { write } = clipboardy;
 import argon2 from "argon2";
 const { hash, verify, needsRehash } = argon2;
 // node apis
-import { writeFileSync } from "fs"; 
+import { writeFileSync } from "fs";
 // modules
 import {
     MASTER_OPTIONS,
@@ -91,10 +91,11 @@ function hasDataRetrievalDialogue(services) {
             message: "Service Name",
             choices: serviceChoiceList(services),
             filter: (inp, ans) => {
-                if (services[inp].length === 0)
-                    ans.users = [{ name: "null", salt: "", length: defaultLength, note: "" }];
-                if (services[inp].length === 1)
+                if (services[inp].length === 0) {
+                    ans.users = [{ name: "null", salt: "", length: defaultLength, note: "", isDefault: true }];
+                } else if (services[inp].length === 1) {
                     ans.users = services[inp]; // input may not be tampered with
+                }
                 return inp;
             }
         },
@@ -102,9 +103,17 @@ function hasDataRetrievalDialogue(services) {
             type: "list",
             name: "users",
             message: "User",
-            choices: (ans) => {
+            askAnswered: true,
+            when: ans => {
+                if (ans.users?.[0].isDefault)
+                    return console.log(infoPrefix, "Service has no users, using default user");
+                if (ans.users?.length === 1)
+                    return console.log(infoPrefix, "Service only has one user, using it");
+                return true;
+            },
+            choices: ans => {
                 const choices = userChoiceList(services[ans.service], false);
-                return choices.length === 1 ? choices : [{ name: "All", value: userChoiceList(services[ans.service], false).map(v => v.value[0])}].concat(choices);
+                return [{ name: "All", value: userChoiceList(services[ans.service], false).map(v => v.value[0]) }].concat(choices);
             }
         }
     ];
