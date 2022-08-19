@@ -63,7 +63,7 @@ const file = {
     version: null,
     checksum: null,
     data: null // encrypted string
-}
+};
 
 /**
  * fetch data if possible and sanity check
@@ -162,7 +162,7 @@ export function saveFile(args, contents) {
     if (contents.data !== undefined) {
         // contents.data is always either an object to encrypt (has version property), a string thats already encrypted, or null
         if (contents.data?.version) {
-            file.data = encryptData(contents.data)
+            file.data = encryptData(contents.data);
         } else {
             file.data = contents.data;
         }
@@ -405,7 +405,7 @@ function encryptData(data) {
  * @returns {Promise<string[]>}
  */
 export async function generatePasswords(service, users, masterPassword, charset, parallelHashes) {
-    const queue = new Array(Math.ceil(users.length / parallelHashes)).fill(null).map((_, i) => users.slice(parallelHashes * i, parallelHashes * (i + 1)))
+    const queue = new Array(Math.ceil(users.length / parallelHashes)).fill(null).map((_, i) => users.slice(parallelHashes * i, parallelHashes * (i + 1)));
     const generated = [];
 
     for (const item of queue) {
@@ -592,14 +592,14 @@ export async function getMaxParallelHashes() {
     // max parallel hashes while only using cores with < 25% usage
     const testStart = cpus();
     await sleep(100);
-    const cpuSlotsAvailable = Math.max(1, Math.floor(cpus().map((v, i) => (
+    const cpuSlotsAvailable = Math.max(1, Math.floor(cpus().map((v, i) =>
         (v.times.idle - testStart[i].times.idle) /
         (v.times.idle - testStart[i].times.idle +
             v.times.irq - testStart[i].times.irq +
             v.times.nice - testStart[i].times.nice +
             v.times.sys - testStart[i].times.sys +
-            v.times.user - testStart[i].times.user)
-    )).filter(v => v >= 0.75).length / PARALLELISM));
+            v.times.user - testStart[i].times.user))
+        .filter(v => v >= 0.75).length / PARALLELISM));
     return Math.min(cpuSlotsAvailable, memorySlotsAvailable);
 }
 
@@ -721,7 +721,7 @@ export function resetTimeout() {
 export function terminate(userInduced) {
     if (!userInduced) {
         console.log();
-        console.log(infoPrefix, "Terminating process due to inactivity.")
+        console.log(infoPrefix, "Terminating process due to inactivity.");
     }
     process.exit(0);
 }

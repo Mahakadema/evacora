@@ -129,7 +129,7 @@ async function retrievePasswords(args, questions, masterPassword) {
     // ask questions
     // Remember: input may not be modified as it can contain objects from the data file
     const input = await prompt(questions);
-    resetTimeout()
+    resetTimeout();
 
     // determine how many hashes to run in parallel
     const maxParallelHashes = input.users.length === 1 ? 1 : await getMaxParallelHashes();
@@ -149,7 +149,8 @@ async function retrievePasswords(args, questions, masterPassword) {
     // check generated password strength
     const minimalGeneratedEntropy = generatedPasswordEntropy(args.charset, Math.min(...input.users.map(v => v.length)));
     if (minimalGeneratedEntropy < strongPasswordThreshold)
-        console.log(`${warnPrefix} One of the passwords you are generating only has ${minimalGeneratedEntropy} bits of entropy.\n${warnPrefix} Generating a longer password or using a larger charset is recommended.`);
+        console.log(`${warnPrefix} One of the passwords you are generating only has ${minimalGeneratedEntropy} bits of entropy.\n` +
+            `${warnPrefix} Generating a longer password or using a larger charset is recommended.`);
 
     // generate passwords
     const generatedPasswords = await generatePasswords(input.service, input.users, masterPassword, args.charset, maxParallelHashes);
@@ -248,7 +249,7 @@ const exportOption = {
     name: "Export data",
     short: "export",
     value: "export"
-}
+};
 const passwordBadOption = new inquirer.Separator(chalk.redBright(`${chalk.gray("Get passwords")} ${chalk.redBright("(No services registered)")}`));
 
 /**
@@ -303,7 +304,7 @@ const resetPwOption = {
     name: "Change the master password",
     short: "change password",
     value: "resetPW"
-}
+};
 const removeServiceBadOption = new inquirer.Separator(`${chalk.gray("Remove a service")} ${chalk.redBright("(No services registered)")}`);
 const editServiceBadOption = new inquirer.Separator(`${chalk.gray("Manage a service's users")} ${chalk.redBright("(No services registered)")}`);
 
@@ -484,7 +485,7 @@ async function addUser(args, data, service) {
                 type: "input",
                 name: "salt",
                 message: "Salt",
-                suffix: " (optional)",
+                suffix: " (optional)"
             },
             {
                 type: "input",
@@ -497,7 +498,7 @@ async function addUser(args, data, service) {
                 type: "input",
                 name: "note",
                 message: "Note",
-                suffix: " (optional)",
+                suffix: " (optional)"
             },
             {
                 type: "list",
@@ -610,7 +611,7 @@ async function editUser(args, data, service, serviceName) {
             type: "input",
             name: `new${action}`,
             message: `Enter the new ${action}`
-        }
+        };
         switch (action) {
             case "name":
                 question.validate = inp => service.find(v => v.name === (inp || "null")) && (inp || "null") !== service[input].name ? "That username is already registered for this service" : true;
@@ -700,7 +701,11 @@ async function exportData(args, data) {
 }
 
 // Parse services into list choices
-const serviceChoiceList = services => Object.getOwnPropertyNames(services).map(v => ({ name: `${v.padEnd(Math.max(...Object.getOwnPropertyNames(services).map(v => v.length)))} (${services[v].length === 0 ? "1 default user" : services[v].length === 1 ? "1 user" : services[v].length + " users"})`, short: v, value: v }));
+const serviceChoiceList = services => Object.getOwnPropertyNames(services).map(v => ({
+    name: `${v.padEnd(Math.max(...Object.getOwnPropertyNames(services).map(v => v.length)))} (${services[v].length === 0 ? "1 default user" : services[v].length === 1 ? "1 user" : services[v].length + " users"})`,
+    short: v,
+    value: v
+}));
 
 // Parse users into list choices
 const userChoiceList = (service, useIndexes) => service.map((v, i) => ({
