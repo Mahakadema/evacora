@@ -45,8 +45,8 @@ export const prompt = inquirer.createPromptModule();
 
 
 /**
- * @typedef {{ file: string, charset: string, verbose: boolean, outputMethod: "CLIPBOARD" | "STDOUT", help: boolean, passwordVisibility: "HIDDEN" | "MASKED" | "CLEAR", quick: boolean, createFile: string, timeout: number, import: string }} args The command line args
- * @typedef {{ data: data, version: number, checksum: string }} fileContents
+ * @typedef {{ file: string?, charset: string, verbose: boolean, outputMethod: "CLIPBOARD" | "STDOUT", help: boolean, passwordVisibility: "HIDDEN" | "MASKED" | "CLEAR", quick: boolean, createFile: string?, timeout: number, import: string? }} args The command line args
+ * @typedef {{ version: number, checksum: string?, data: data? }} fileContents
  * @typedef {{ version: number, services: {} }} data
  * @typedef {{ key: Buffer, salt: Buffer }} EncryptionSecret
  */
@@ -84,6 +84,7 @@ export async function fetchFile(args) {
     if (!args.file)
         return noData;
 
+    // load file
     let fileContent = null;
     try {
         fileContent = JSON.parse(readFileSync(args.file, "utf-8")) ?? {};
@@ -107,6 +108,7 @@ export async function fetchFile(args) {
         return noData;
     }
 
+    // validate data
     file.checksum = fileContent.checksum ?? null; // data.checksum has to be either nullish, or a argon2 hash
     file.data = fileContent.data ?? null; // data.data has to be either nullish, or an object containing service objects
     let forceRehash = false;
@@ -207,21 +209,13 @@ export function createFile(args) {
 export async function importData(args, password, data) {
     // init encryption
     await initEncryptionKey(password, false);
+
+    // import new data
     let imported;
     try {
         const fileContents = JSON.parse(readFileSync(args.import, "utf-8")) ?? {};
 
-        // fix version
-        if (fileContents.version !== DATA_VERSION) {
-            if (fileContents.version && fileContents.version < DATA_VERSION) {
-                console.log(warnPrefix, "Data version outdated, updating...");
-                updateData(fileContents);
-            } else {
-                throw new Error(`Cannot read data with version=${fileContents.version}`);
-            }
-        }
-
-        // make sure data is well formated
+        // make sure data is ok
         validateData(fileContents);
 
         imported = fileContents;
@@ -233,7 +227,8 @@ export async function importData(args, password, data) {
         }
         return;
     }
-    // Ask user for operation
+
+    // Ask user for operation; if data is null auto select "overwrite", ask for confirmation if "overwrite" is the selected mode
     const { mode = "overwrite", confirmed } = await prompt([
         {
             type: "list",
@@ -250,6 +245,7 @@ export async function importData(args, password, data) {
         }
     ]);
     resetTimeout();
+
     // Execute
     let importedServices = 0;
     let importedUsers = 0;
@@ -279,7 +275,7 @@ export async function importData(args, password, data) {
         importedServices = Object.getOwnPropertyNames(imported.services).length;
         importedUsers = Object.getOwnPropertyNames(imported.services).map(v => imported.services[v]).flat().length;
     } else {
-        return;
+        return; // if the user didn't confirm, just exit
     }
 
     saveFile(args, { data });
@@ -288,7 +284,7 @@ export async function importData(args, password, data) {
 }
 
 /**
- * Updates a file to the current version
+ * Updates the file to the current version
  */
 function updateFile() {
     switch (file.version) {
@@ -357,15 +353,7 @@ export async function decryptData(args, encrypted, password, dataDamaged, hasFil
 
         const data = JSON.parse(cleartext);
 
-        if (data.version !== DATA_VERSION) {
-            if (data.version && data.version < DATA_VERSION) {
-                console.log(warnPrefix, "Data version outdated, updating...");
-                updateData(data);
-            } else {
-                throw new Error(`Cannot read data with version=${data.version}`);
-            }
-        }
-
+        // make sure data is ok
         validateData(data);
 
         return data;
@@ -425,7 +413,7 @@ export async function generatePasswords(service, users, masterPassword, charset,
 }
 
 /**
- * Generates a 256 bit cipher key
+ * Generates a 256 bit cipher key from a password
  * @param {string} password 
  * @param {Buffer} salt
  * @returns {Promise<Buffer>}
@@ -447,7 +435,7 @@ export function cipherKey(password, salt) {
  * @param {string} password
  * @param {boolean} force whether to force generation, even if a key already exists
  */
-export async function initEncryptionKey(password, force) {
+export async function initEncryptionKey(password, force = false) {
     if (!encryptionSecret || force) {
         const salt = randomBytes(24);
         encryptionSecret = {
@@ -627,10 +615,21 @@ export function newData() {
 }
 
 /**
- * Validate that data is good
+ * Validate that data is good and fix if possible
  * @param {data} data 
  */
 function validateData(data) {
+    // make sure data has correct version
+    if (data.version !== DATA_VERSION) {
+        if (data.version && data.version < DATA_VERSION) {
+            console.log(warnPrefix, "Data version outdated, updating...");
+            updateData(data);
+        } else {
+            throw new Error(`Cannot read data with version=${data.version}`);
+        }
+    }
+
+    // throw if data is not healthy
     if (!data.services || typeof data.services !== "object")
         throw new Error("'services' is either missing or not an object");
     for (const { service, name } of Object.getOwnPropertyNames(data.services).map(v => ({ service: data.services[v], name: v }))) {
@@ -718,7 +717,7 @@ export function resetTimeout() {
  * because writes are sync and block the thread
  * @param {boolean} userInduced whether the user ordered this termination
  */
-export function terminate(userInduced) {
+export function terminate(userInduced = false) {
     if (!userInduced) {
         console.log();
         console.log(infoPrefix, "Terminating process due to inactivity.");

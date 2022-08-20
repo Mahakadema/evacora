@@ -21,7 +21,7 @@ import {
 
 
 /**
- * @typedef {{ file: string, charset: string, verbose: boolean, outputMethod: "CLIPBOARD" | "STDOUT", help: boolean, passwordVisibility: "HIDDEN" | "MASKED" | "CLEAR", quick: boolean, createFile: string, timeout: number, import: string }} args The command line args
+ * @typedef {{ file: string?, charset: string, verbose: boolean, outputMethod: "CLIPBOARD" | "STDOUT", help: boolean, passwordVisibility: "HIDDEN" | "MASKED" | "CLEAR", quick: boolean, createFile: string?, timeout: number, import: string? }} args The command line args
  * @typedef {{ data: data, version: number, checksum: string }} fileContents
  */
 
