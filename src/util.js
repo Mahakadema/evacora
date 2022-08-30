@@ -149,7 +149,7 @@ export async function fetchFile(args) {
 /**
  * Saves data to the local file.
  * If the 'data' property is a data object, {@link initEncryptionKey} needs to have been called beforehand
- * @param {args} args 
+ * @param {args} args
  * @param {{ version?: number, checksum?: string, data?: string | data? }} contents
  */
 export function saveFile(args, contents) {
@@ -187,7 +187,7 @@ export function saveFile(args, contents) {
 
 /**
  * Creates a file at the location of args.createFile
- * @param {args} args 
+ * @param {args} args
  */
 export function createFile(args) {
     const file = JSON.stringify(newFile());
@@ -202,9 +202,9 @@ export function createFile(args) {
 
 /**
  * Import an export file into the data
- * @param {args} args 
- * @param {string} password 
- * @param {data?} data 
+ * @param {args} args
+ * @param {string} password
+ * @param {data?} data
  */
 export async function importData(args, password, data) {
     // init encryption
@@ -296,7 +296,7 @@ function updateFile() {
 
 /**
  * Modifies data to reflect the current version
- * @param {data} data 
+ * @param {data} data
  */
 function updateData(data) {
     switch (data.version) {
@@ -320,10 +320,10 @@ function updateData(data) {
 let encryptionSecret = null;
 
 /**
- * decrypts the ciphertext stored in data using the master password 
+ * decrypts the ciphertext stored in data using the master password
  * @param {args} args
  * @param {string} encrypted the ciphertext along with the key salt and IV
- * @param {string} password 
+ * @param {string} password
  * @param {boolean} dataDamaged whether the data is parsable
  * @param {boolean} hasFile whether a file was loaded
  * @param {number} fileVersion FILE_VERSION of the file
@@ -385,11 +385,11 @@ function encryptData(data) {
 
 /**
  * Generates the passwords for the selected users
- * @param {string} service 
- * @param {{ name: string, salt: string, length: number, note: string }[]} users 
- * @param {string} masterPassword 
- * @param {string} charset 
- * @param {number} parallelHashes 
+ * @param {string} service
+ * @param {{ name: string, salt: string, length: number, note: string }[]} users
+ * @param {string} masterPassword
+ * @param {string} charset
+ * @param {number} parallelHashes
  * @returns {Promise<string[]>}
  */
 export async function generatePasswords(service, users, masterPassword, charset, parallelHashes) {
@@ -414,7 +414,7 @@ export async function generatePasswords(service, users, masterPassword, charset,
 
 /**
  * Generates a 256 bit cipher key from a password
- * @param {string} password 
+ * @param {string} password
  * @param {Buffer} salt
  * @returns {Promise<Buffer>}
  */
@@ -616,7 +616,7 @@ export function newData() {
 
 /**
  * Validate that data is good and fix if possible
- * @param {data} data 
+ * @param {data} data
  */
 function validateData(data) {
     // make sure data has correct version
@@ -651,7 +651,7 @@ function validateData(data) {
 
 /**
  * returns the entropy of a password given a length and a charset containing distinct characters
- * @param {string} charset 
+ * @param {string} charset
  * @param {number} length the password length
  * @returns {number} The entropy in bits
  */
@@ -696,7 +696,7 @@ let timeoutMs = null;
 let timeout = null;
 /**
  * Initialize a termination timeout
- * @param {number} milliseconds 
+ * @param {number} milliseconds
  */
 export function initTimeout(milliseconds) {
     timeoutMs = milliseconds;
@@ -727,7 +727,7 @@ export function terminate(userInduced = false) {
 
 /**
  * resolves after ms milliseconds
- * @param {number} ms 
+ * @param {number} ms
  * @returns {Promise<void>}
  */
 export function sleep(ms) {
@@ -736,7 +736,7 @@ export function sleep(ms) {
 
 /**
  * Rejects all passwords that are not between 4 and 10m characters long
- * @param {number} length 
+ * @param {number} length
  */
 export function validateLength(length) {
     return length >= 4 && length <= 10000000 && Number.isInteger(length) ? true : "Length has to be an integer between 4 and 10000000";

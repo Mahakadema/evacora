@@ -185,8 +185,8 @@ async function retrievePasswords(args, questions, masterPassword) {
 
 /**
  * Retrieves the master password from the user
- * @param {args} args 
- * @param {string?} checksum 
+ * @param {args} args
+ * @param {string?} checksum
  * @param {boolean} forceRehash True if the hash of the password is invalid
  * @param {boolean} hasFile True if a data file was loaded
  * @returns {Promise<master>}
@@ -254,9 +254,9 @@ const passwordBadOption = new inquirer.Separator(chalk.redBright(`${chalk.gray("
 
 /**
  * Main menu with data
- * @param {args} args 
- * @param {data} data 
- * @param {string} password 
+ * @param {args} args
+ * @param {data} data
+ * @param {string} password
  */
 async function mainMenu(args, data, password) {
     const { input } = await prompt([
@@ -310,7 +310,7 @@ const editServiceBadOption = new inquirer.Separator(`${chalk.gray("Manage a serv
 
 /**
  * Menu for editing data
- * @param {args} args 
+ * @param {args} args
  * @param {data} data
  * @param {string} password
  */
@@ -348,8 +348,8 @@ async function editData(args, data, password) {
 
 /**
  * Menu for adding a service
- * @param {args} args 
- * @param {data} data 
+ * @param {args} args
+ * @param {data} data
  */
 async function addService(args, data) {
     console.log();
@@ -376,8 +376,8 @@ async function addService(args, data) {
 
 /**
  * Menu for deleting a service
- * @param {args} args 
- * @param {data} data 
+ * @param {args} args
+ * @param {data} data
  */
 async function removeService(args, data) {
     console.log();
@@ -424,8 +424,8 @@ const removeUserBadOption = new inquirer.Separator(`${chalk.gray("Remove a user"
 const editUserBadOption = new inquirer.Separator(`${chalk.gray("Change a user's settings")} ${chalk.redBright("(No users registered)")}`);
 /**
  * Service editing menu
- * @param {args} args 
- * @param {data} data 
+ * @param {args} args
+ * @param {data} data
  */
 async function editService(args, data) {
     console.log();
@@ -466,9 +466,9 @@ async function editService(args, data) {
 
 /**
  * Menu for adding a user to a service
- * @param {args} args 
- * @param {data} data 
- * @param {{}[]} service 
+ * @param {args} args
+ * @param {data} data
+ * @param {{}[]} service
  */
 async function addUser(args, data, service) {
     let keepGoing = true;
@@ -521,9 +521,9 @@ async function addUser(args, data, service) {
 
 /**
  * Menu for deleting a user from a service
- * @param {args} args 
- * @param {data} data 
- * @param {{}[]} service 
+ * @param {args} args
+ * @param {data} data
+ * @param {{}[]} service
  */
 async function removeUser(args, data, service) {
     console.log();
@@ -552,10 +552,10 @@ async function removeUser(args, data, service) {
 
 /**
  * Menu for editing a users properties
- * @param {args} args 
- * @param {data} data 
+ * @param {args} args
+ * @param {data} data
  * @param {{}[]} service
- * @param {string} serviceName 
+ * @param {string} serviceName
  */
 async function editUser(args, data, service, serviceName) {
     console.log();
@@ -648,8 +648,8 @@ async function editUser(args, data, service, serviceName) {
 
 /**
  * Menu for changing the master password
- * @param {args} args 
- * @param {data} data 
+ * @param {args} args
+ * @param {data} data
  */
 async function resetMaster(args, data) {
     const { confirmed, password } = await prompt([
@@ -680,8 +680,8 @@ async function resetMaster(args, data) {
 
 /**
  * Export the encrypted data in an unencrypted format
- * @param {args} args 
- * @param {data} data 
+ * @param {args} args
+ * @param {data} data
  */
 async function exportData(args, data) {
     const cwd = process.cwd();
