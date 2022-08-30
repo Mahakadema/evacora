@@ -69,7 +69,10 @@ function noDataRetrievalDialogue() {
             name: "__salt",
             message: "Salt",
             suffix: " (optional)",
-            filter: (inp, ans) => { ans.users[0].salt = inp; return inp; } // Set salt for all users without salt
+            filter: (inp, ans) => {
+                ans.users[0].salt = inp;
+                return inp;
+            }
         },
         {
             type: "input",
@@ -129,7 +132,6 @@ async function retrievePasswords(args, questions, masterPassword) {
     // ask questions
     // Remember: input may not be modified as it can contain objects from the data file
     const input = await prompt(questions);
-    resetTimeout();
 
     // determine how many hashes to run in parallel
     const maxParallelHashes = input.users.length === 1 ? 1 : await getMaxParallelHashes();
@@ -268,7 +270,6 @@ async function mainMenu(args, data, password) {
                 .concat([exportOption, divisionLine, exitOption])
         }
     ]);
-    resetTimeout();
     switch (input) {
         case "passwords":
             await retrievePasswords(args, hasDataRetrievalDialogue(data.services), password);
@@ -327,7 +328,6 @@ async function editData(args, data, password) {
             .concat(Object.getOwnPropertyNames(data.services).length > 0 ? [removeServiceOption, editServiceOption] : [removeServiceBadOption, editServiceBadOption])
             .concat([resetPwOption, divisionLine, exitOption])
     }]);
-    resetTimeout();
     switch (input) {
         case "add":
             await addService(args, data);
@@ -367,7 +367,6 @@ async function addService(args, data) {
             choices: [{ name: "Yes", value: true }, { name: "No", value: false }]
         }
     ]);
-    resetTimeout();
     data.services[input] = [];
     saveFile(args, { data });
     if (jumpAddUser)
@@ -395,7 +394,6 @@ async function removeService(args, data) {
             when: ans => !args.quick && ans.input !== "__exit"
         }
     ]);
-    resetTimeout();
     if (input === "__exit")
         return;
     if (confirmed || args.quick) {
@@ -437,7 +435,6 @@ async function editService(args, data) {
             choices: serviceChoiceList(data.services)
         }
     ]);
-    resetTimeout();
     const { input } = await prompt([
         {
             type: "list",
@@ -448,7 +445,6 @@ async function editService(args, data) {
                 .concat([divisionLine, exitOption])
         }
     ]);
-    resetTimeout();
     switch (input) {
         case "add":
             await addUser(args, data, data.services[service]);
@@ -507,7 +503,6 @@ async function addUser(args, data, service) {
                 choices: [{ name: "Yes", value: true }, { name: "No", value: false }]
             }
         ]);
-        resetTimeout();
         service.push({
             name: name || "null",
             salt,
@@ -541,7 +536,6 @@ async function removeUser(args, data, service) {
             when: ans => !args.quick && ans.input !== "__exit"
         }
     ]);
-    resetTimeout();
     if (input === "__exit")
         return;
     if (confirmed || args.quick) {
@@ -574,7 +568,6 @@ async function editUser(args, data, service, serviceName) {
     console.log(infoPrefix, "Length:", chalk.cyan(service[input].length));
     console.log(infoPrefix, "note:", chalk.cyan(service[input].note));
     console.log();
-    resetTimeout();
     // Allow editing multiple properties until the user is done
     while (true) {
         const { action } = await prompt([{
@@ -606,7 +599,6 @@ async function editUser(args, data, service, serviceName) {
                 exitOption
             ]
         }]);
-        resetTimeout();
         const question = {
             type: "input",
             name: `new${action}`,
@@ -616,33 +608,28 @@ async function editUser(args, data, service, serviceName) {
             case "name":
                 question.validate = inp => service.find(v => v.name === (inp || "null")) && (inp || "null") !== service[input].name ? "That username is already registered for this service" : true;
                 const { newname } = await prompt([question]);
-                resetTimeout();
                 service[input].name = newname || "null";
                 saveFile(args, { data });
                 break;
             case "salt":
                 const { newsalt } = await prompt([question]);
-                resetTimeout();
                 service[input].salt = newsalt;
                 saveFile(args, { data });
                 break;
             case "length":
                 question.validate = inp => validateLength(Number(inp));
                 const { newlength } = await prompt([question]);
-                resetTimeout();
                 service[input].length = Number(newlength);
                 saveFile(args, { data });
                 break;
             case "note":
                 const { newnote } = await prompt([question]);
-                resetTimeout();
                 service[input].note = newnote;
                 saveFile(args, { data });
                 break;
             case "__exit":
                 return;
         }
-        resetTimeout();
     }
 }
 
@@ -667,7 +654,6 @@ async function resetMaster(args, data) {
             when: ans => ans.confirmed
         }
     ]);
-    resetTimeout();
     if (confirmed || args.quick) {
         console.log(infoPrefix, "Generating key and checksum for the new password");
         await initEncryptionKey(password, true);

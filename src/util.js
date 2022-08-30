@@ -41,7 +41,7 @@ export const infoPrefix = chalk.rgb(11, 142, 130)("[") + chalk.rgb(38, 226, 208)
 export const debugPrefix = chalk.white("[") + chalk.whiteBright("DEBUG") + chalk.white("]");
 export const grayBright = [164, 164, 164];
 
-export const prompt = inquirer.createPromptModule();
+export const promptRaw = inquirer.createPromptModule();
 
 
 /**
@@ -244,7 +244,6 @@ export async function importData(args, password, data) {
             when: ans => ans.mode !== "add"
         }
     ]);
-    resetTimeout();
 
     // Execute
     let importedServices = 0;
@@ -692,6 +691,21 @@ export function getSafePathForNewJsonFile(path) {
     }
 }
 
+
+/**
+ * Prompts the user the questions and returns the answers
+ * @param {any[]} questions The questions to prompt
+ * @param {any} initialAnswers The initual answer hash
+ */
+export async function prompt(questions, initialAnswers) {
+    let ans = initialAnswers;
+    for (const q of questions) {
+        ans = await promptRaw([q], ans);
+        resetTimeout();
+    }
+    return ans;
+}
+
 let timeoutMs = null;
 let timeout = null;
 /**
@@ -707,8 +721,10 @@ export function initTimeout(milliseconds) {
  * Reset the timeout to the max counter
  */
 export function resetTimeout() {
-    clearTimeout(timeout);
-    timeout = setTimeout(terminate, timeoutMs);
+    if (timeoutMs) {
+        clearTimeout(timeout);
+        timeout = setTimeout(terminate, timeoutMs);
+    }
 }
 
 /**
@@ -719,7 +735,7 @@ export function resetTimeout() {
  */
 export function terminate(userInduced = false) {
     if (!userInduced) {
-        console.log();
+        console.log("\n");
         console.log(infoPrefix, "Terminating process due to inactivity.");
     }
     process.exit(0);
