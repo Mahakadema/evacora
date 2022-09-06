@@ -58,7 +58,7 @@ export const promptRaw = inquirer.createPromptModule();
  * **********
  */
 
-// used by fetchFile, saveFile, createFile and updateFile
+// used by fetchFile, saveFile and updateFile
 const file = {
     version: null,
     checksum: null,
@@ -190,10 +190,10 @@ export function saveFile(args, contents) {
  * @param {args} args
  */
 export function createFile(args) {
-    const file = JSON.stringify(newFile());
+    const fileContents = JSON.stringify(newFile());
     const path = getSafePathForNewJsonFile(args.createFile);
     if (path) {
-        writeFileSync(path, file);
+        writeFileSync(path, fileContents);
         console.log(infoPrefix, `Created new data file at ${path}`);
     } else {
         console.log(errorPrefix, "The directory you specified does not exist");
@@ -280,6 +280,41 @@ export async function importData(args, password, data) {
     saveFile(args, { data });
 
     console.log(infoPrefix, `Successfully imported ${importedServices} services and ${importedUsers} users from`, args.import);
+}
+
+/**
+ * Validate that data is good and fix if possible
+ * @param {data} data
+ */
+ function validateData(data) {
+    // make sure data has correct version
+    if (data.version !== DATA_VERSION) {
+        if (data.version && data.version < DATA_VERSION) {
+            console.log(warnPrefix, "Data version outdated, updating...");
+            updateData(data);
+        } else {
+            throw new Error(`Cannot read data with version=${data.version}`);
+        }
+    }
+
+    // throw if data is not healthy
+    if (!data.services || typeof data.services !== "object")
+        throw new Error("'services' is either missing or not an object");
+    for (const { service, name } of Object.getOwnPropertyNames(data.services).map(v => ({ service: data.services[v], name: v }))) {
+        if (!Array.isArray(service))
+            throw new Error(`services.${name} has to be an Array`);
+
+        for (let i = 0; i < service.length; i++) {
+            if (!service[i].name)
+                throw new Error(`services.${name}[${i}] has no name`);
+            if ((service[i].salt ?? null) === null)
+                throw new Error(`services.${name}[${i}] (${service[i].name}) has no salt`);
+            if (!validateLength(service[i].length))
+                throw new Error(`services.${name}[${i}] (${service[i].name}) has an invalid length`);
+            if ((service[i].note ?? null) === null)
+                throw new Error(`services.${name}[${i}] (${service[i].name}) has no note`);
+        }
+    }
 }
 
 /**
@@ -611,41 +646,6 @@ export function newData() {
         version: DATA_VERSION,
         services: {}
     };
-}
-
-/**
- * Validate that data is good and fix if possible
- * @param {data} data
- */
-function validateData(data) {
-    // make sure data has correct version
-    if (data.version !== DATA_VERSION) {
-        if (data.version && data.version < DATA_VERSION) {
-            console.log(warnPrefix, "Data version outdated, updating...");
-            updateData(data);
-        } else {
-            throw new Error(`Cannot read data with version=${data.version}`);
-        }
-    }
-
-    // throw if data is not healthy
-    if (!data.services || typeof data.services !== "object")
-        throw new Error("'services' is either missing or not an object");
-    for (const { service, name } of Object.getOwnPropertyNames(data.services).map(v => ({ service: data.services[v], name: v }))) {
-        if (!Array.isArray(service))
-            throw new Error(`services.${name} has to be an Array`);
-
-        for (let i = 0; i < service.length; i++) {
-            if (!service[i].name)
-                throw new Error(`services.${name}[${i}] has no name`);
-            if ((service[i].salt ?? null) === null)
-                throw new Error(`services.${name}[${i}] (${service[i].name}) has no salt`);
-            if (!validateLength(service[i].length))
-                throw new Error(`services.${name}[${i}] (${service[i].name}) has an invalid length`);
-            if ((service[i].note ?? null) === null)
-                throw new Error(`services.${name}[${i}] (${service[i].name}) has no note`);
-        }
-    }
 }
 
 /**

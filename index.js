@@ -129,9 +129,8 @@ async function loop(args, data, password) {
             message: "Do you want to perform another action?",
             choices: [{ name: "Yes", value: true }, { name: "No", value: false }]
         }]);
-        if (!loop) {
+        if (!loop)
             terminate(true);
-        }
     }
 }
 

@@ -60,4 +60,5 @@ It is advised to start using a common naming and usage scheme early on to avoid 
 - If the default character set gets rejected by the website, use `[A-Za-z0-9!+]`
 - If the generated password gets rejected by the website because of something like "Your password needs to contain at least one number", append a 0 for numbers and ! for special characters to the end
 - If the generated password gets rejected because it is too long, go down to exactly 16 characters, if that is still too long, 12
+
 If these rules are enforced consistently, nearly all guessing games should be eliminated.
