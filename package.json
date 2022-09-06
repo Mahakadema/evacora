@@ -1,6 +1,6 @@
 {
   "name": "evacora",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "",
   "exports": "./index.js",
   "type": "module",
