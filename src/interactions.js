@@ -194,6 +194,10 @@ async function retrievePasswords(args, questions, masterPassword) {
  * @returns {Promise<master>}
  */
 async function getMasterPassword(args, checksum, forceRehash, hasFile) {
+    // if forceRehash, notify user that password checking is disabled
+    if (forceRehash)
+        console.log(warnPrefix, "Stored password hash is invalid, password checking is disabled this time");
+
     // ask master password
     let password = null;
     while (!password) {
@@ -203,12 +207,16 @@ async function getMasterPassword(args, checksum, forceRehash, hasFile) {
             message: "Master Password",
             mask: args.passwordVisibility === "MASKED" ? "*" : null,
             /**
-             * TODO: integrate the password check back into the promp once async validators work
+             * TODO: integrate the password check back into the prompt once async validators work
              */
-            // validate: async inp => checksum === null || forceRehash ? true : (await verify(checksum, inp, MASTER_OPTIONS)) ? true : "Password Incorrect"
+            // validate: async inp => inp ? checksum === null || forceRehash ? true : (await verify(checksum, inp, MASTER_OPTIONS)) ? true : "Password Incorrect" : "Password cannot be empty"
         }]);
         if (checksum === null || forceRehash || await verify(checksum, answeredPassword, MASTER_OPTIONS)) {
-            password = answeredPassword;
+            if (answeredPassword) {
+                password = answeredPassword;
+            } else {
+                console.log(errorPrefix, "Password cannot be empty");
+            }
         } else {
             console.log(errorPrefix, "Password incorrect!");
         }
