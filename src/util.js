@@ -782,5 +782,7 @@ export function sleep(ms) {
  * @param {number} length
  */
 export function validateLength(length) {
-    return length >= 4 && length <= 10000000 && Number.isInteger(length) ? true : "Length has to be an integer between 4 and 10000000";
+    const min = 4;
+    const max = 131072;
+    return length >= min && length <= max && Number.isInteger(length) ? true : `Length has to be an integer between ${min} and ${max}`;
 }
