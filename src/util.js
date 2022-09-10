@@ -29,8 +29,7 @@ export const DATA_VERSION = 1; // expected version of the data property in the d
 
 export const defaultInactivityTimeout = 120; // After this amount of milliseconds has passed without any interaction, the app will terminate
 
-export const base64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-export const defaultCharset = "!#$%()*,-./0123456789:@ABCDEFGHIJKLMNOPQR^_`abcdefghijklmnopqr|~";
+export const defaultCharset = "!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
 export const defaultLength = 30;
 export const strongPasswordThreshold = 64; // required bits of entropy for a good generated password
 export const validJSONPathRegExp = /^(?:\w\:)?(?:[^\\\/]*[\\\/])*(?:[^\\\/]*\.json)$/i;
@@ -49,6 +48,8 @@ export const promptRaw = inquirer.createPromptModule();
  * @typedef {{ version: number, checksum: string?, data: data? }} fileContents
  * @typedef {{ version: number, services: {} }} data
  * @typedef {{ key: Buffer, salt: Buffer }} EncryptionSecret
+ * @typedef {{ name: string, salt: string, length: number, note: string }} User
+ * @typedef {"CUSTOM" | "REGULAR" | "ALPHANUMERIC" | "ALPHANUMERIC_WITH_SPECIAL"} Scheme Password schemes to be possibly used in the future
  */
 
 
@@ -420,7 +421,7 @@ function encryptData(data) {
 /**
  * Generates the passwords for the selected users
  * @param {string} service
- * @param {{ name: string, salt: string, length: number, note: string }[]} users
+ * @param {User[]} users
  * @param {string} masterPassword
  * @param {string} charset
  * @param {number} parallelHashes
@@ -434,12 +435,13 @@ export async function generatePasswords(service, users, masterPassword, charset,
         const hashes = await Promise.all(item.map(user => hash(masterPassword, {
             type: argon2id,
             salt: Buffer.from(`ASk[Jw,%7/M"~&p9!H|Lfl3FUw{3l;P!${user.salt}#${user.name}@${service}`),
-            hashLength: user.length,
+            hashLength: getRequiredHashBytes(user, charset),
             memoryCost: MEMORY_COST,
             timeCost: TIME_COST,
-            parallelism: PARALLELISM
-        }).then(v => v.split("$").at(-1).split("").slice(0, user.length))));
-        generated.push(...hashes.map(v0 => v0.map(v1 => charset[base64.indexOf(v1) % charset.length]).join("")));
+            parallelism: PARALLELISM,
+            raw: true
+        }).then(v => getPasswordFromBuffer(v, charset, user))));
+        generated.push(...hashes);
         resetTimeout();
     }
 
@@ -593,15 +595,53 @@ export function parseArgs() {
     // sort charset and remove duplicate characters
     args.charset = args.charset.split("").sort().filter((v, i, a) => a[i - 1] !== v).join("");
 
-    // charset has to contain 2-64 characters
-    if (args.charset.length > 64 || args.charset.length < 2)
-        throw new Error("The charset has to contain 2 to 64 unique characters");
+    // charset has to contain 2 or more characters
+    if (args.charset.length < 2)
+        throw new Error("The charset has to contain at least 2 unique characters");
 
     // timeout may not be negative
     if (!(args.timeout > 0))
         throw new Error("The inactivity timeout has to be positive");
 
     return args;
+}
+
+/**
+ * Returns the required amount of bytes for a password hash
+ * @param {User} user
+ * @param {string} charset
+ */
+function getRequiredHashBytes(user, charset) {
+    return Math.max(user.length, Math.ceil(Math.log2(charset.length) * user.length / 8));
+}
+
+/**
+ * Returns the generated password from a buffer
+ * This is done by effectively just writing out
+ * the most significant bits of the buffer in a
+ * base equal to the length of the used charset
+ * @param {Buffer} hash
+ * @param {string} charset
+ * @param {User} user
+ */
+function getPasswordFromBuffer(hash, charset, user) {
+    // convert hash to BigInt; the bigint will have exactly as many bits as required to fit the characters
+    let number = 0n;
+    const requiredBytes = Math.log2(charset.length) * user.length / 8;
+    for (let i = 0; i < requiredBytes; i++) {
+        number = (number << 8n) + BigInt(hash.at(i));
+    }
+    number >>= BigInt(Math.floor(8 - (requiredBytes - Math.ceil(requiredBytes - 1)) * 8)); // truncate unneeded bits
+    
+    // convert to base charset.length
+    const characters = [];
+    const charsetLength = BigInt(charset.length);
+    for (let i = 0; i < user.length; i++) {
+        characters.push(charset[Number(number % charsetLength)]);
+        number /= charsetLength;
+    }
+    
+    return characters.reverse().join("");
 }
 
 /**
@@ -655,20 +695,7 @@ export function newData() {
  * @returns {number} The entropy in bits
  */
 export function generatedPasswordEntropy(charset, length) {
-    const duplicatesMin = Math.floor(base64.length / charset.length); // amount of full repeats of charset to reach length=64
-    const highFrequencyCount = base64.length - charset.length * duplicatesMin; // Amount of letters easier to guess
-    /**
-     * The optionsTimeProduct is proportional to the effort needed to crack a single character,
-     * while the optionsTimeProduct of a single bit worth of information is equal to 2.
-     * The optionsTimeProduct is equal to the length of a charset with equal entropy, but
-     * where every character has the same frequency (evacora causes some characters to be more
-     * frequent if the charset length is not a power of 2)
-     */
-    const optionsTimeProduct =
-        highFrequencyCount * highFrequencyCount * (duplicatesMin + 1) / base64.length + // total guesses for high freq nums * P(specific high freq number)
-        (charset.length - highFrequencyCount + 2 * highFrequencyCount) * (charset.length - highFrequencyCount) * duplicatesMin / base64.length; // total guesses for low freq numbers * P(specific low freq number)
-    const charEntropy = Math.log2(optionsTimeProduct);
-    return charEntropy * length;
+    return Math.log2(charset.length) * length;
 }
 
 /**
