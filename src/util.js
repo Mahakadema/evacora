@@ -25,7 +25,7 @@ export const MASTER_OPTIONS = {
 };
 
 export const FILE_VERSION = 1; // expected version of the data file
-export const DATA_VERSION = 1; // expected version of the data property in the data file (seperate because the data is encrypted and thus cannot be verified in the same step)
+export const DATA_VERSION = 2; // expected version of the data property in the data file (seperate because the data is encrypted and thus cannot be verified in the same step)
 
 export const defaultInactivityTimeout = 120; // After this amount of milliseconds has passed without any interaction, the app will terminate
 
@@ -94,7 +94,7 @@ export async function fetchFile(args) {
         file.version = fileContent.version ?? null;
         if (file.version !== FILE_VERSION) {
             if (file.version && file.version < FILE_VERSION) {
-                console.log(warnPrefix, "File version outdated, updating...");
+                console.log(warnPrefix, `File version outdated, updating from ${file.version} to ${FILE_VERSION}`);
                 updateFile();
             } else {
                 throw new Error(`Cannot read file with version=${file.version}`);
@@ -287,11 +287,11 @@ export async function importData(args, password, data) {
  * Validate that data is good and fix if possible
  * @param {data} data
  */
- function validateData(data) {
+function validateData(data) {
     // make sure data has correct version
     if (data.version !== DATA_VERSION) {
         if (data.version && data.version < DATA_VERSION) {
-            console.log(warnPrefix, "Data version outdated, updating...");
+            console.log(warnPrefix, `Data version outdated, updating from ${data.version} to ${DATA_VERSION}`);
             updateData(data);
         } else {
             throw new Error(`Cannot read data with version=${data.version}`);
@@ -336,6 +336,14 @@ function updateFile() {
 function updateData(data) {
     switch (data.version) {
         case 1:
+            for (const { service, name } of Object.getOwnPropertyNames(data.services).map(v => ({ service: data.services[v], name: v }))) {
+                service.forEach(v => {
+                    if (!(validateLength(v.length) === true)) {
+                        console.log(warnPrefix, `data.services.${name}.${v.name} has an invalid length. Changing from ${v.length} to 131072`);
+                        v.length = 131072;
+                    }
+                });
+            }
         default:
             data.version = DATA_VERSION;
     }
@@ -632,7 +640,7 @@ function getPasswordFromBuffer(hash, charset, user) {
         number = (number << 8n) + BigInt(hash.at(i));
     }
     number >>= BigInt(Math.floor(8 - (requiredBytes - Math.ceil(requiredBytes - 1)) * 8)); // truncate unneeded bits
-    
+
     // convert to base charset.length
     const characters = [];
     const charsetLength = BigInt(charset.length);
@@ -640,7 +648,7 @@ function getPasswordFromBuffer(hash, charset, user) {
         characters.push(charset[Number(number % charsetLength)]);
         number /= charsetLength;
     }
-    
+
     return characters.reverse().join("");
 }
 
