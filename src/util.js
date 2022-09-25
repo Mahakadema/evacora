@@ -7,7 +7,7 @@ const { argon2id, hash } = argon2;
 import inquirer from "inquirer";
 // node apis
 import { readFileSync, writeFileSync, existsSync } from "fs";
-import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
+import { createCipheriv, createDecipheriv, randomBytes, createHash } from "crypto";
 import { cpus, totalmem, freemem } from "os";
 
 
@@ -29,7 +29,10 @@ export const DATA_VERSION = 2; // expected version of the data property in the d
 
 export const defaultInactivityTimeout = 120; // After this amount of milliseconds has passed without any interaction, the app will terminate
 
-export const defaultCharset = "!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
+export const defaultRegularCharset = "!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
+export const alphanumericCharset = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+export const alphanumericWithSpecialUsedCharacter = "!";
+export const numericCharset = "0123456789";
 export const defaultLength = 30;
 export const strongPasswordThreshold = 64; // required bits of entropy for a good generated password
 export const validJSONPathRegExp = /^(?:\w\:)?(?:[^\\\/]*[\\\/])*(?:[^\\\/]*\.json)$/i;
@@ -48,8 +51,8 @@ export const promptRaw = inquirer.createPromptModule();
  * @typedef {{ version: number, checksum: string?, data: data? }} fileContents
  * @typedef {{ version: number, services: {} }} data
  * @typedef {{ key: Buffer, salt: Buffer }} EncryptionSecret
- * @typedef {{ name: string, salt: string, length: number, note: string }} User
- * @typedef {"CUSTOM" | "REGULAR" | "ALPHANUMERIC" | "ALPHANUMERIC_WITH_SPECIAL"} Scheme Password schemes to be possibly used in the future
+ * @typedef {{ name: string, salt: string, length: number, note: string, scheme: Scheme }} User
+ * @typedef {"REGULAR" | "ALPHANUMERIC" | "ALPHANUMERIC_WITH_SPECIAL" | "NUMERIC"} Scheme
  */
 
 
@@ -314,6 +317,8 @@ function validateData(data) {
                 throw new Error(`services.${name}[${i}] (${service[i].name}) has an invalid length`);
             if ((service[i].note ?? null) === null)
                 throw new Error(`services.${name}[${i}] (${service[i].name}) has no note`);
+            if ((service[i].scheme ?? null) === null)
+                throw new Error(`services.${name}[${i}] (${service[i].name}) has no scheme`);
         }
     }
 }
@@ -342,6 +347,8 @@ function updateData(data) {
                         console.log(warnPrefix, `data.services.${name}.${v.name} has an invalid length. Changing from ${v.length} to 131072`);
                         v.length = 131072;
                     }
+                    if (!v.scheme)
+                        v.scheme = "REGULAR";
                 });
             }
         default:
@@ -431,29 +438,133 @@ function encryptData(data) {
  * @param {string} service
  * @param {User[]} users
  * @param {string} masterPassword
- * @param {string} charset
+ * @param {string} regularCharset
  * @param {number} parallelHashes
  * @returns {Promise<string[]>}
  */
-export async function generatePasswords(service, users, masterPassword, charset, parallelHashes) {
+export async function generatePasswords(service, users, masterPassword, regularCharset, parallelHashes) {
     const queue = new Array(Math.ceil(users.length / parallelHashes)).fill(null).map((_, i) => users.slice(parallelHashes * i, parallelHashes * (i + 1)));
     const generated = [];
 
     for (const item of queue) {
         const hashes = await Promise.all(item.map(user => hash(masterPassword, {
             type: argon2id,
-            salt: Buffer.from(`ASk[Jw,%7/M"~&p9!H|Lfl3FUw{3l;P!${user.salt}#${user.name}@${service}`),
-            hashLength: getRequiredHashBytes(user, charset),
+            salt: createHash("sha256").update(`${user.salt},${user.length}#${user.name}@${service}:${user.scheme}3.14159265358979323846264338327950`, "utf-8").digest(),
+            hashLength: getRequiredHashBytes(user, regularCharset),
             memoryCost: MEMORY_COST,
             timeCost: TIME_COST,
             parallelism: PARALLELISM,
             raw: true
-        }).then(v => getPasswordFromBuffer(v, charset, user))));
+        }).then(v => getPasswordFromBuffer(v, regularCharset, user))));
         generated.push(...hashes);
         resetTimeout();
     }
 
     return generated;
+}
+
+/**
+ * Returns the required amount of bytes for a password hash
+ * @param {User} user
+ * @param {string} regularCharset
+ */
+function getRequiredHashBytes(user, regularCharset) {
+    switch (user.scheme) {
+        case "REGULAR":
+            return Math.ceil(Math.log2(regularCharset.length) * 0.125 * user.length) + 4;
+        case "ALPHANUMERIC":
+            return Math.ceil(Math.log2(alphanumericCharset.length) * 0.125 * user.length) + 4;
+        case "ALPHANUMERIC_WITH_SPECIAL":
+            return Math.ceil(Math.log2(alphanumericCharset.length) * 0.125 * (user.length - 1)) + Math.ceil(Math.log2(user.length) / 8) + 8;
+        case "NUMERIC":
+            return Math.ceil(Math.log2(numericCharset.length) * 0.125 * user.length) + 4;
+    }
+    throw new Error("Unknown scheme: " + user.scheme);
+}
+
+/**
+ * Returns the generated password from a buffer
+ * This is done by effectively just writing out
+ * the most significant bits of the buffer in a
+ * base equal to the length of the used charset
+ * @param {Buffer} buff
+ * @param {string} regularCharset
+ * @param {User} user
+ */
+function getPasswordFromBuffer(buff, regularCharset, user) {
+    switch (user.scheme) {
+        case "REGULAR":
+            return bigintToCharset(bufferToBigint(buff), regularCharset, user.length);
+        case "ALPHANUMERIC":
+            return bigintToCharset(bufferToBigint(buff), alphanumericCharset, user.length);
+        case "ALPHANUMERIC_WITH_SPECIAL":
+            const lengthBytes = Math.ceil(Math.log2(user.length) / 8) + 4;
+            const baseString = bigintToCharset(bufferToBigint(buff, lengthBytes), alphanumericCharset, user.length - 1);
+            const specialCharIndex = Number(bufferToBigint(buff, 0, lengthBytes) % BigInt(user.length));
+            return baseString.slice(0, specialCharIndex) + alphanumericWithSpecialUsedCharacter + baseString.slice(specialCharIndex)
+        case "NUMERIC":
+            return bigintToCharset(bufferToBigint(buff), numericCharset, user.length);
+        default:
+            throw new Error("Unknown scheme: " + user.scheme);
+    }
+}
+
+/**
+ * Returns the buffer as a bigint
+ * @param {Buffer} buff
+ * @param {number} start the position at which to start reading
+ * @param {number} end the position at which to stop reading
+ */
+function bufferToBigint(buff, start = 0, end = buff.length) {
+    let number = 0n;
+    for (let i = start; i < end; i++) {
+        number = (number << 8n) + BigInt(buff.at(i));
+    }
+    return number;
+}
+
+/**
+ * Returns the representation of the bigint in the base of the given charset
+ * @param {bigint} int 
+ * @param {string} charset the charset to use
+ * @param {number} length the length of the resulting string
+ */
+function bigintToCharset(int, charset, length) {
+    /**
+     * This way of converting the top n bits to base
+     * m has a very slight bias towards characters
+     * lower in the charset, this reduces the entropy
+     * by a fraction of a bit
+     */
+    // convert to base charset.length
+    const characters = [];
+    const charsetLength = BigInt(charset.length);
+    for (let i = 0; i < length; i++) {
+        characters.push(charset[Number(int % charsetLength)]);
+        int /= charsetLength;
+    }
+
+    return characters.join("");
+}
+
+/**
+ * returns the entropy of a password given a length and a charset containing distinct characters
+ * @param {User} user
+ * @param {string} regularCharset
+ * @returns {number} The entropy in bits
+ */
+export function generatedPasswordEntropy(user, regularCharset) {
+    switch (user.scheme) {
+        case "REGULAR":
+            return Math.floor(Math.log2(regularCharset.length) * user.length);
+        case "ALPHANUMERIC":
+            return Math.floor(Math.log2(alphanumericCharset.length) * user.length);
+        case "ALPHANUMERIC_WITH_SPECIAL":
+            return Math.floor(Math.log2(alphanumericCharset.length) * (user.length - 1) + Math.log2(user.length));
+        case "NUMERIC":
+            return Math.floor(Math.log2(numericCharset.length) * user.length);
+    }
+    throw new Error("Unknown scheme: " + user.scheme);
 }
 
 /**
@@ -501,21 +612,21 @@ export async function initEncryptionKey(password, force = false) {
  */
 export function helpMessage() {
     console.log(
-        `${infoPrefix} evacora v1.2.0\n` +
+        `${infoPrefix} evacora v2.0.0\n` +
         `${infoPrefix}\n` +
         `${infoPrefix} A stateless password manager\n` +
         `${infoPrefix}\n` +
         `${infoPrefix} Available options:\n` +
-        `${infoPrefix} --help, -h               display this list\n` +
-        `${infoPrefix} --file, -f <path>        specify a file containing registered accounts\n` +
-        `${infoPrefix} --create-file <path>     create a data file at the specified location\n` +
-        `${infoPrefix} --import <path>          import data from an exported file, has to be used in combination with --file\n` +
-        `${infoPrefix} --charset, -m <charset>  specify up to 64 characters to be used in the passwords\n` +
-        `${infoPrefix} --verbose, -v            log verbosely\n` +
+        `${infoPrefix} --charset, -m <charset>  specify the characters to be used in passwords with scheme 'Regular'\n` +
         `${infoPrefix} --copy, -c               copy the passwords into the clipboard instead of using STDOUT\n` +
-        `${infoPrefix} --show-password, -s      repeatable; specify whether the password is hidden, masked or clear\n` +
+        `${infoPrefix} --create-file <path>     create a data file at the specified location\n` +
+        `${infoPrefix} --file, -f <path>        specify a file containing registered accounts\n` +
+        `${infoPrefix} --help, -h               display this list\n` +
+        `${infoPrefix} --import <path>          import data from an exported file, has to be used in combination with --file\n` +
         `${infoPrefix} --quick, -q              skip confirm requests on destructive actions\n` +
-        `${infoPrefix} --timeout, -t <number>   specify a number of seconds of inactivity until automatic termination`
+        `${infoPrefix} --show-password, -s      repeatable; specify whether the password is hidden, masked or clear\n` +
+        `${infoPrefix} --timeout, -t <number>   specify a number of seconds of inactivity until automatic termination\n` +
+        `${infoPrefix} --verbose, -v            log verbosely`
     );
 }
 
@@ -557,7 +668,7 @@ export function parseArgs() {
 
     args = {
         file: args["--file"] || null,
-        charset: args["--charset"] ?? defaultCharset,
+        charset: args["--charset"] ?? defaultRegularCharset,
         verbose: args["--verbose"] ?? false,
         outputMethod: (args["--copy"] ?? false) ? "CLIPBOARD" : "STDOUT",
         passwordVisibility: (args["--show-password"] ?? 0) === 0 ? "HIDDEN" : args["--show-password"] === 1 ? "MASKED" : "CLEAR",
@@ -615,44 +726,6 @@ export function parseArgs() {
 }
 
 /**
- * Returns the required amount of bytes for a password hash
- * @param {User} user
- * @param {string} charset
- */
-function getRequiredHashBytes(user, charset) {
-    return Math.max(user.length, Math.ceil(Math.log2(charset.length) * user.length / 8));
-}
-
-/**
- * Returns the generated password from a buffer
- * This is done by effectively just writing out
- * the most significant bits of the buffer in a
- * base equal to the length of the used charset
- * @param {Buffer} hash
- * @param {string} charset
- * @param {User} user
- */
-function getPasswordFromBuffer(hash, charset, user) {
-    // convert hash to BigInt; the bigint will have exactly as many bits as required to fit the characters
-    let number = 0n;
-    const requiredBytes = Math.log2(charset.length) * user.length / 8;
-    for (let i = 0; i < requiredBytes; i++) {
-        number = (number << 8n) + BigInt(hash.at(i));
-    }
-    number >>= BigInt(Math.floor(8 - (requiredBytes - Math.ceil(requiredBytes - 1)) * 8)); // truncate unneeded bits
-
-    // convert to base charset.length
-    const characters = [];
-    const charsetLength = BigInt(charset.length);
-    for (let i = 0; i < user.length; i++) {
-        characters.push(charset[Number(number % charsetLength)]);
-        number /= charsetLength;
-    }
-
-    return characters.reverse().join("");
-}
-
-/**
  * returns the maximum amount of hashes running in parallel given the currently available resources
  * @returns {Promise<number>}
  */
@@ -694,16 +767,6 @@ export function newData() {
         version: DATA_VERSION,
         services: {}
     };
-}
-
-/**
- * returns the entropy of a password given a length and a charset containing distinct characters
- * @param {string} charset
- * @param {number} length the password length
- * @returns {number} The entropy in bits
- */
-export function generatedPasswordEntropy(charset, length) {
-    return Math.log2(charset.length) * length;
 }
 
 /**

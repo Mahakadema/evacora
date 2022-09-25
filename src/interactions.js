@@ -11,6 +11,7 @@ import { writeFileSync } from "fs";
 // modules
 import {
     MASTER_OPTIONS,
+    alphanumericWithSpecialUsedCharacter,
     defaultLength,
     strongPasswordThreshold,
     errorPrefix,
@@ -60,7 +61,7 @@ function noDataRetrievalDialogue() {
             name: "__user",
             message: "Username",
             filter: (inp, ans) => {
-                ans.users = [{ name: inp || "null", salt: null, length: null, note: "" }];
+                ans.users = [{ name: inp || "null", salt: null, length: null, scheme: null, note: "" }];
                 return inp || "null";
             }
         },
@@ -75,12 +76,27 @@ function noDataRetrievalDialogue() {
             }
         },
         {
+            type: "list",
+            name: "__scheme",
+            message: "Scheme",
+            choices: [
+                { name: "Regular                              Uses characters from the provided charset (defaults to printable ASCII)", short: "Regular", value: "REGULAR" },
+                { name: "Alphanumeric                         A-Z, a-z and 0-9", short: "Alphanumeric", value: "ALPHANUMERIC" },
+                { name: `Alphanumeric with Special Character  Same as alphanumeric but with a single '${alphanumericWithSpecialUsedCharacter}' inserted`, short: "Alphanumeric with Special", value: "ALPHANUMERIC_WITH_SPECIAL" },
+                { name: "Numeric                              Random numbers 0-9", short: "Numeric", value: "NUMERIC" }
+            ],
+            filter: (inp, ans) => {
+                ans.users[0].scheme = inp;
+                return inp;
+            }
+        },
+        {
             type: "input",
             name: "__length",
             message: "Length",
             default: defaultLength,
             validate: inp => validateLength(Number(inp)),
-            filter: (inp, ans) => validateLength(Number(inp)) === true ? (ans.users[0].length = Number(inp)) || inp : inp // Set length for all users without valid length
+            filter: (inp, ans) => validateLength(Number(inp)) === true ? (ans.users[0].length = Number(inp)) || inp : inp
         }
     ];
 }
@@ -95,9 +111,9 @@ function hasDataRetrievalDialogue(services) {
             choices: serviceChoiceList(services),
             filter: (inp, ans) => {
                 if (services[inp].length === 0) {
-                    ans.users = [{ name: "null", salt: "", length: defaultLength, note: "", isDefault: true }];
+                    ans.users = [{ name: "null", salt: "", length: defaultLength, scheme: "REGULAR", note: "", isDefault: true }];
                 } else if (services[inp].length === 1) {
-                    ans.users = services[inp]; // input may not be tampered with
+                    ans.users = [Object.assign({}, services[inp][0])]; // input may not be tampered with
                 }
                 return inp;
             }
@@ -143,13 +159,13 @@ async function retrievePasswords(args, questions, masterPassword) {
             `${debugPrefix} charset: ${chalk.greenBright(args.charset)}\n` +
             `${debugPrefix} service name: ${chalk.greenBright(input.service)}\n` +
             `${debugPrefix} password: ${chalk.greenBright(args.passwordVisibility === "HIDDEN" ? "[hidden]" : args.passwordVisibility === "MASKED" ? "*".repeat(masterPassword.length) : masterPassword)}\n` +
-            `${debugPrefix} users:${input.users.reduce((p, c) => p + `\n${debugPrefix}   ${chalk.greenBright(c.salt.padStart(Math.max(...input.users.map(v => v.salt.length))))} # ${chalk.greenBright(c.name)} {${chalk.greenBright(c.length)}}`, "")}\n` +
+            `${debugPrefix} users:${input.users.reduce((p, c) => p + `\n${debugPrefix}   ${chalk.greenBright(c.salt.padStart(Math.max(...input.users.map(v => v.salt.length))))} # ${chalk.greenBright(c.name)} (${chalk.greenBright(c.length)}, ${chalk.greenBright(c.scheme)})`, "")}\n` +
             `${debugPrefix} maximum parallel hashes: ${chalk.greenBright(maxParallelHashes)}\n` +
             `${debugPrefix} output method: ${chalk.greenBright(args.outputMethod)}`);
     }
 
     // check generated password strength
-    const minimalGeneratedEntropy = generatedPasswordEntropy(args.charset, Math.min(...input.users.map(v => v.length)));
+    const minimalGeneratedEntropy = Math.min(...input.users.map(v => generatedPasswordEntropy(v, args.charset)));
     if (minimalGeneratedEntropy < strongPasswordThreshold)
         console.log(`${warnPrefix} One of the passwords you are generating only has ${minimalGeneratedEntropy} bits of entropy.\n` +
             `${warnPrefix} Generating a longer password or using a larger charset is recommended.`);
@@ -173,13 +189,15 @@ async function retrievePasswords(args, questions, masterPassword) {
             const saltLength = Math.max(...input.users.map(v => v.salt.length));
             const userLength = Math.max(...input.users.map(v => v.name.length));
             const passLength = Math.max(...generatedPasswords.map(v => v.length));
-            const passwords = generatedPasswords.map(v => chalk.redBright(v.padEnd(passLength)));
+            const schemeLength = Math.max(...input.users.map(v => v.scheme.length));
             const salts = input.users.map(v => chalk.rgb(...grayBright)(v.salt.padStart(saltLength)));
             const users = input.users.map(v => chalk.white(v.name.padEnd(userLength)));
+            const passwords = generatedPasswords.map(v => chalk.redBright(v.padEnd(passLength)));
+            const schemes = input.users.map(v => chalk.yellow(v.scheme.padEnd(schemeLength)));
             const notes = input.users.map(v => chalk.rgb(...grayBright)(v.note));
             console.log(`\n${infoPrefix} [${chalk.cyan(input.service)}]`);
             for (let i = 0; i < input.users.length; i++)
-                console.log(`${infoPrefix} ${salts[i]} ${chalk.gray("#")} ${users[i]} ${passwords[i]} ${notes[i]}`);
+                console.log(`${infoPrefix} ${salts[i]} ${chalk.gray("#")} ${users[i]} ${passwords[i]} ${schemes[i]} ${notes[i]}`);
             break;
     }
     console.log();
@@ -478,7 +496,7 @@ async function addUser(args, data, service) {
     let keepGoing = true;
     while (keepGoing) {
         console.log();
-        const { name, salt, length, note, repeat } = await prompt([
+        const { name, salt, scheme, length, note, repeat } = await prompt([
             {
                 type: "input",
                 name: "name",
@@ -490,6 +508,17 @@ async function addUser(args, data, service) {
                 name: "salt",
                 message: "Salt",
                 suffix: " (optional)"
+            },
+            {
+                type: "list",
+                name: "scheme",
+                message: "Scheme",
+                choices: [
+                    { name: "Regular                              Uses characters from the provided charset (defaults to printable ASCII)", short: "Regular", value: "REGULAR" },
+                    { name: "Alphanumeric                         A-Z, a-z and 0-9", short: "Alphanumeric", value: "ALPHANUMERIC" },
+                    { name: `Alphanumeric with Special Character  Same as alphanumeric but with a single '${alphanumericWithSpecialUsedCharacter}' inserted`, short: "Alphanumeric with Special", value: "ALPHANUMERIC_WITH_SPECIAL" },
+                    { name: "Numeric                              Random numbers 0-9", short: "Numeric", value: "NUMERIC" }
+                ]
             },
             {
                 type: "input",
@@ -515,6 +544,7 @@ async function addUser(args, data, service) {
             name: name || "null",
             salt,
             length: Number(length),
+            scheme,
             note
         });
         saveFile(args, { data });
@@ -574,6 +604,7 @@ async function editUser(args, data, service, serviceName) {
     console.log(infoPrefix, "Username:", chalk.cyan(service[input].name));
     console.log(infoPrefix, "Salt:", chalk.cyan(service[input].salt));
     console.log(infoPrefix, "Length:", chalk.cyan(service[input].length));
+    console.log(infoPrefix, "Scheme:", chalk.cyan(service[input].scheme));
     console.log(infoPrefix, "note:", chalk.cyan(service[input].note));
     console.log();
     // Allow editing multiple properties until the user is done
@@ -594,6 +625,11 @@ async function editUser(args, data, service, serviceName) {
                     value: "salt"
                 },
                 {
+                    name: "Change scheme",
+                    short: "scheme",
+                    value: "scheme"
+                },
+                {
                     name: "Change length",
                     short: "length",
                     value: "length"
@@ -608,9 +644,9 @@ async function editUser(args, data, service, serviceName) {
             ]
         }]);
         const question = {
-            type: "input",
+            type: action === "scheme" ? "list" : "input",
             name: `new${action}`,
-            message: `Enter the new ${action}`
+            message: action === "scheme" ? `Select the new ${action}` : `Enter the new ${action}`
         };
         switch (action) {
             case "name":
@@ -622,6 +658,17 @@ async function editUser(args, data, service, serviceName) {
             case "salt":
                 const { newsalt } = await prompt([question]);
                 service[input].salt = newsalt;
+                saveFile(args, { data });
+                break;
+            case "scheme":
+                question.choices = [
+                    { name: "Regular", value: "REGULAR" },
+                    { name: "Alphanumeric", value: "ALPHANUMERIC" },
+                    { name: "Alphanumeric with Special Character", short: "Alphanumeric with Special", value: "ALPHANUMERIC_WITH_SPECIAL" },
+                    { name: "Numeric", value: "NUMERIC" }
+                ];
+                const { newscheme } = await prompt([question]);
+                service[input].scheme = newscheme;
                 saveFile(args, { data });
                 break;
             case "length":
