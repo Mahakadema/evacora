@@ -706,7 +706,7 @@ async function resetMaster(args, data) {
             name: "password",
             message: "New Master Password",
             mask: args.passwordVisibility === "MASKED" ? "*" : null,
-            when: ans => ans.confirmed
+            when: ans => ans.confirmed || args.quick
         }
     ]);
     if (confirmed || args.quick) {
