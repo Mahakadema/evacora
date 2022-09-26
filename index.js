@@ -15,7 +15,6 @@ import {
     helpMessage,
     parseArgs,
     initTimeout,
-    resetTimeout,
     terminate
 } from "./src/util.js";
 
