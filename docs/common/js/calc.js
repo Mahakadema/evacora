@@ -203,8 +203,9 @@ function calcHash() {
     } catch (e) { }
 }
 
-function encodeUtf8(str) {
-    return new TextEncoder().encode(str);
+// encode either a string or return the given Uint8Array
+function encodeUtf8(val) {
+    return typeof val === "string" ? new TextEncoder().encode(val) : val;
 }
 
 function allocateArray(arr) {

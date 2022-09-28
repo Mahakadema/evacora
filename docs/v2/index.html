@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charSet="utf-8" />
+    <title>evacora</title>
+    <link rel="stylesheet" href="../common/assets/style.css" />
+</head>
+
+<body>
+    <br>
+    <div id="options-container" class="center">
+        <form id="options">
+            <div class="input-field">
+                <label for="service-name">Service Name</label><br>
+                <input type="text" required id="service-name" name="service-name"><br>
+            </div>
+            <div class="input-field">
+                <label for="password">Master Password</label><br>
+                <input type="password" required id="password" name="password"><br>
+            </div>
+            <div class="input-field">
+                <label for="username">Username (optional)</label><br>
+                <input type="text" id="username" name="username"><br>
+            </div>
+            <div class="input-field">
+                <label for="salt">Salt (optional)</label><br>
+                <input type="text" id="salt" name="salt"><br>
+            </div>
+            <div class="input-field">
+                Scheme<br>
+                <input type="radio" id="scheme-regular" name="scheme" value="REGULAR" checked>
+                <label for="scheme-regular">Regular</label><br>
+                <input type="radio" id="scheme-alphanumeric" name="scheme" value="ALPHANUMERIC">
+                <label for="scheme-alphanumeric">Alphanumeric</label><br>
+                <input type="radio" id="scheme-alphanumeric-with-special" name="scheme"
+                    value="ALPHANUMERIC_WITH_SPECIAL">
+                <label for="scheme-alphanumeric-with-special">Alphanum with !</label><br>
+                <input type="radio" id="scheme-numeric" name="scheme" value="NUMERIC">
+                <label for="scheme-numeric">Numeric</label><br>
+            </div>
+            <div class="input-field">
+                <label for="length-slide" id="length-slide-label">Length: 30</label><br>
+                <input type="range" id="length-slide" name="length-slide" min="10" max="60" value="30"><br>
+            </div>
+            <br>
+            <button type="submit" id="generate">Generate</button>
+        </form>
+    </div>
+
+    <br>
+    <div>
+        <p id="password-container" class="center">No password generated yet <button disabled>Copy</button></p>
+    </div>
+</body>
+
+<footer>
+    <div id="version-selector" class="version-selector"></div>
+    <div class="center">
+        <a href="https://github.com/Mahakadema/evacora">v2.0.0</a> build by <a href="https://github.com/Mahakadema"
+            target="blank">mahakadema</a> using an <a href="https://github.com/antelle/argon2-browser"
+            target="blank">argon2 implementation by antelle</a>
+    </div>
+</footer>
+
+<script src="./js/main.js"></script>
+<script src="../common/js/calc.js"></script>
+<script src="../common/js/text-encoder-lite.min.js"></script>
+<script src="../common/js/version-selector.js"></script>
+
+</html>

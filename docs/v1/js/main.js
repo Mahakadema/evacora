@@ -81,7 +81,7 @@ function loadScript(src, onload, onerror) {
 }
 
 function calcWorker(arg, cb) {
-    const worker = new Worker('js/worker.js');
+    const worker = new Worker('../common/js/worker.js');
     worker.method = "simd";
     var loaded = false;
     worker.onmessage = function (e) {
